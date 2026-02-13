@@ -1,0 +1,12 @@
+name: shinyTrends
+title: shinyTrends
+username: cfournierdel
+account: cfournierdel
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 16668272
+bundleId: 11576629
+url: https://cfournierdel.shinyapps.io/shinyTrends/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

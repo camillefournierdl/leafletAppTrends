@@ -121,17 +121,17 @@ ui <- page_sidebar(
   sidebar = sidebar(
     width = 300,
     radioButtons(
-      "marker_color_mode", "Marker Color",
+      "marker_color_mode", "Outcome of Interest",
       choices = c(
-        "By trend category"          = "trend",
-        "By mean pollution level"    = "pollution"
+        "Trajectory category"          = "trend",
+        "Mean pollution level"    = "pollution"
       ),
       selected = "trend"
     ),
     hr(),
     h5("Filters"),
     checkboxGroupInput(
-      "trend_filter", "Trend Category",
+      "trend_filter", "Trajectory Category",
       choices  = setNames(trend_levels, trend_labels),
       selected = trend_levels
     ),
@@ -158,25 +158,57 @@ ui <- page_sidebar(
     ),
   ),
 
-  layout_columns(
-    col_widths = 12,
-    card(
-      full_screen = TRUE,
-      card_header("Map"),
-      leafletOutput("map", height = "500px")
-    ),
-    card(
-      card_header(textOutput("plot_title")),
-      conditionalPanel(
-        condition = "output.city_selected",
-        plotlyOutput("trend_plot", height = "350px")
-      ),
-      conditionalPanel(
-        condition = "!output.city_selected",
-        p("Click a city marker on the map to see its pollution trajectory.",
-          class = "text-muted", style = "padding: 2rem; text-align: center;")
+  tags$p(
+    "Explore PM2.5 pollution levels and trajectories across 13,000+ urban centers. Original data from Van Donkelaar et al.", tags$a("https://www.satpm.org/", href = "https://www.satpm.org/", target = "_blank"),".", 
+    tags$br(),
+    "Trajectory classification based on work from Camille Fournier de Lauriere.",
+    tags$a("Paper", href = "https://doi.org/XXXX", target = "_blank"), "|",
+    tags$a("Code", href = "https://github.com/camillefournierdl/leafletAppTrends", target = "_blank"), "|",
+    tags$a("cfournier@ethz.ch", href = "mailto::cfournier@ethz.ch", target = "_blank"),
+    tags$br(),
+    "Use the left side panel to select between raw pollution levels and trajectories. Filter cities by trajectory type, income group, and pollution level. Click on city markers to see their pollution trajectory over time in the panel below.",
+    class = "text-muted", style = "margin: 0.2rem 0 0.5rem 0; font-size: 0.9rem;"
+  ),
+  
+  tags$style(HTML("
+    .vlabel-wrap { display: flex; align-items: stretch; }
+    .vlabel {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: #6c757d;
+      padding: 0.3rem;
+      white-space: nowrap;
+    }
+    .vlabel-content { flex: 1; min-width: 0; }
+  ")),
+  
+  div(class = "vlabel-wrap",
+      div(class = "vlabel", "Map"),
+      div(class = "vlabel-content",
+          card(
+            full_screen = TRUE,
+            leafletOutput("map", height = "500px")
+          )
       )
-    )
+  ),
+  div(class = "vlabel-wrap",
+      div(class = "vlabel", textOutput("plot_title", inline = TRUE)),
+      div(class = "vlabel-content",
+          card(
+            conditionalPanel(
+              condition = "output.city_selected",
+              plotlyOutput("trend_plot", height = "350px")
+            ),
+            conditionalPanel(
+              condition = "!output.city_selected",
+              p("Click a city marker on the map to see its pollution trajectory.",
+                class = "text-muted", style = "padding: 2rem; text-align: center;")
+            )
+          )
+      )
   )
 )
 
@@ -243,7 +275,7 @@ server <- function(input, output, session) {
         position = "bottomright",
         colors   = unname(trend_colors),
         labels   = trend_labels,
-        title    = "Trend Category",
+        title    = "Trajectory Category",
         opacity  = 0.8,
         layerId  = "legend_trend"
       )
@@ -338,7 +370,7 @@ server <- function(input, output, session) {
           position = "bottomright",
           colors   = unname(trend_colors),
           labels   = trend_labels,
-          title    = "Trend Category",
+          title    = "Trajectory Category",
           opacity  = 0.8,
           layerId  = "legend_trend"
         )
