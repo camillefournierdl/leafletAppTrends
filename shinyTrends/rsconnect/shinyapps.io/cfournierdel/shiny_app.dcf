@@ -1,0 +1,10 @@
+name: shiny_app
+title:
+username: cfournierdel
+account: cfournierdel
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 16668119
+bundleId: 11576439
+url: https://cfournierdel.shinyapps.io/shiny_app/
+version: 1
