@@ -1,6 +1,6 @@
 # prep_data.R
 # One-time script: reads raw project data, outputs RDS files for the Shiny app.
-# Run from the project root (trendsAirPollutionAQM/):
+# Run from a different project root (trendsAirPollutionAQM/):
 #   Rscript shiny_app/prep_data.R
 
 library(sf)
@@ -11,10 +11,11 @@ library(rmapshaper)
 # ---- Paths (relative to project root) ----
 classif_country_path  <- "output/classifByCountry.csv"
 classif_city_path     <- "output/classificationPollution_PosNeg.csv"
+signif_trends_path    <- "output/signifTrends.csv"
 gpkg_path             <- "data/UC_fixed_geom.gpkg"
 summary_city_path     <- "data/summaryCityUC.csv"
 yearly_ts_path        <- "data/yearlyCityTS.csv"
-out_dir               <- "shiny_app/data"
+out_dir               <- "shinyTrends/data"
 
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -61,12 +62,17 @@ uc_centroids <- st_centroid(uc, of_largest_polygon = TRUE) %>%
 classif <- read.csv(classif_city_path, stringsAsFactors = FALSE) %>%
   select(ID, subtypesLQ, bestfit, bestfitLQ)
 
+# Join significant trends (improvement detection)
+signif <- read.csv(signif_trends_path, stringsAsFactors = FALSE) %>%
+  select(ID, sig_downward, rounded_peak)
+
 # Join summary stats
 summary_city <- read.csv(summary_city_path, stringsAsFactors = FALSE) %>%
   select(ID, mean_pollution, mean_population)
 
 cities <- uc_centroids %>%
   left_join(classif, by = "ID") %>%
+  left_join(signif, by = "ID") %>%
   left_join(summary_city, by = "ID")
 
 saveRDS(cities, file.path(out_dir, "cities.rds"))

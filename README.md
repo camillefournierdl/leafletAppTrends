@@ -5,8 +5,8 @@ Interactive Shiny app for exploring long-term PM2.5 pollution trajectories acros
 ## Features
 
 - **Interactive map** with city-level markers and country-level choropleth
-- **Color by trend category or mean pollution level** for both city markers and country polygons
-- **Filter cities** by trend category, World Bank income group, and mean pollution level
+- **Color by trend category, mean pollution level or significant improvements** for both city markers and country polygons
+- **Filter cities** by trend category, World Bank income group, mean pollution level and significant improvements
 - **Simple vs. population-weighted country averages** — toggle how country-level summaries are computed (applies to both trend mode and pollution mode)
 - **Click any city** to view its PM2.5 time series with a loess smooth
 

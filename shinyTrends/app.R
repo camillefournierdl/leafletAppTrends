@@ -113,6 +113,13 @@ marker_radius <- function(pop) {
 )
 pollution_pal <- function(x) .pollution_pal_internal(log1p(x))
 
+# Year-of-improvement palette (1998–2016)
+year_pal <- colorNumeric(
+  palette = c("#2166AC", "#67A9CF", "#F7DC6F", "#EF8A62", "#B2182B"),
+  domain  = c(1998, 2016),
+  na.color = "#808080"
+)
+
 # ---- UI ----
 ui <- page_sidebar(
   title = "Air Pollution Trajectories Explorer",
@@ -124,7 +131,8 @@ ui <- page_sidebar(
       "marker_color_mode", "Outcome of Interest",
       choices = c(
         "Trajectory category"          = "trend",
-        "Mean pollution level"    = "pollution"
+        "Mean pollution level"         = "pollution",
+        "Significant improvement"      = "improvement"
       ),
       selected = "trend"
     ),
@@ -148,6 +156,16 @@ ui <- page_sidebar(
       selected = unname(pollution_ranges)
     ),
     hr(),
+    checkboxGroupInput(
+      "improvement_filter", "Significant Improvement",
+      choices  = c(
+        "Improving"          = "yes",
+        "Not improving"      = "no",
+        "Improving throughout" = "always"
+      ),
+      selected = c("yes", "no", "always")
+    ),
+    hr(),
     radioButtons(
       "country_avg_mode", "Country Average",
       choices = c(
@@ -166,7 +184,9 @@ ui <- page_sidebar(
     tags$a("Code", href = "https://github.com/camillefournierdl/leafletAppTrends", target = "_blank"), "|",
     tags$a("cfournier@ethz.ch", href = "mailto::cfournier@ethz.ch", target = "_blank"),
     tags$br(),
-    "Use the left side panel to select between raw pollution levels and trajectories. Filter cities by trajectory type, income group, and pollution level. Click on city markers to see their pollution trajectory over time in the panel below.",
+    "Use the left side panel to select between raw pollution levels, trajectories and significant improvements. Filter cities by trajectory type, income group, pollution level, and whether they experience significant improvements.",
+    tags$br(),
+    "Click on city markers to see their pollution trajectory over time in the panel below.",
     class = "text-muted", style = "margin: 0.2rem 0 0.5rem 0; font-size: 0.9rem;"
   ),
   
@@ -230,6 +250,16 @@ server <- function(input, output, session) {
       left_join(income_lookup, by = c("CTR_MN_ISO" = "iso_a3")) %>%
       filter(Income.group %in% input$income_filter)
 
+    # Improvement filter
+    improv_sel <- input$improvement_filter
+    fc <- fc %>%
+      mutate(.improv_cat = case_when(
+        subtypesLQ == "Negative Linear"                      ~ "always",
+        !is.na(sig_downward) & sig_downward == TRUE          ~ "yes",
+        TRUE                                                 ~ "no"
+      )) %>%
+      filter(.improv_cat %in% improv_sel)
+
     fc
   })
 
@@ -290,10 +320,15 @@ server <- function(input, output, session) {
       clearGroup("CityMarkers") %>%
       clearGroup("Countries") %>%
       removeControl("legend_trend") %>%
-      removeControl("legend_pollution")
+      removeControl("legend_pollution") %>%
+      removeControl("legend_improvement")
 
     # --- Redraw country polygons based on color mode ---
-    if (color_mode == "trend") {
+    if (color_mode == "improvement") {
+      # In improvement mode, countries are neutral grey
+      country_fill <- rep("#E0E0E0", nrow(countries))
+      country_tip <- countries$name
+    } else if (color_mode == "trend") {
       trend_col <- if (input$country_avg_mode == "popweighted") "weighted_mode_value" else "mode_value"
       trend_vals <- countries[[trend_col]]
       country_pal <- colorFactor(
@@ -336,16 +371,30 @@ server <- function(input, output, session) {
 
       display_trend <- trend_display[fc$subtypesLQ]
 
-      popup_text <- paste0(
-        "<strong>", fc$UC_NM_MN, "</strong> (", fc$CTR_MN_NM, ")<br/>",
-        "Trend: ", display_trend, "<br/>",
-        "Mean PM2.5: ", round(fc$mean_pollution, 1), " \u00b5g/m\u00b3"
-      )
-
-      if (color_mode == "trend") {
-        fill_col <- city_color(fc$subtypesLQ)
+      if (color_mode == "improvement") {
+        has_improv <- !is.na(fc$sig_downward) & fc$sig_downward == TRUE
+        always_declining <- fc$subtypesLQ == "Negative Linear"
+        fill_col <- ifelse(always_declining, "#3E5519",
+                    ifelse(has_improv, year_pal(fc$rounded_peak), "#D3D3D3"))
+        popup_text <- paste0(
+          "<strong>", fc$UC_NM_MN, "</strong> (", fc$CTR_MN_NM, ")<br/>",
+          "Trend: ", display_trend, "<br/>",
+          ifelse(always_declining, "Improving throughout period",
+          ifelse(has_improv,
+                 paste0("Significant improvement (peak: ", fc$rounded_peak, ")"),
+                 "No significant improvement"))
+        )
       } else {
-        fill_col <- pollution_pal(fc$mean_pollution)
+        popup_text <- paste0(
+          "<strong>", fc$UC_NM_MN, "</strong> (", fc$CTR_MN_NM, ")<br/>",
+          "Trend: ", display_trend, "<br/>",
+          "Mean PM2.5: ", round(fc$mean_pollution, 1), " \u00b5g/m\u00b3"
+        )
+        if (color_mode == "trend") {
+          fill_col <- city_color(fc$subtypesLQ)
+        } else {
+          fill_col <- pollution_pal(fc$mean_pollution)
+        }
       }
 
       proxy <- proxy %>%
@@ -374,7 +423,7 @@ server <- function(input, output, session) {
           opacity  = 0.8,
           layerId  = "legend_trend"
         )
-    } else {
+    } else if (color_mode == "pollution") {
       # Log-spaced legend breaks for the custom palette
       leg_breaks <- c(2, 5, 10, 20, 40, 80, 120)
       proxy %>%
@@ -385,6 +434,18 @@ server <- function(input, output, session) {
           title    = "Mean PM2.5",
           opacity  = 0.8,
           layerId  = "legend_pollution"
+        )
+    } else {
+      # Improvement mode: year scale + special categories
+      year_breaks <- c(1998, 2002, 2006, 2010, 2014, 2016)
+      proxy %>%
+        addLegend(
+          position = "bottomright",
+          colors   = c(year_pal(year_breaks), "#3E5519", "#D3D3D3"),
+          labels   = c(as.character(year_breaks), "Improving throughout", "No improvement"),
+          title    = "Year of Peak",
+          opacity  = 0.8,
+          layerId  = "legend_improvement"
         )
     }
   })
