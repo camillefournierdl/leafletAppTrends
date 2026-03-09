@@ -107,7 +107,8 @@ marker_radius <- function(pop) {
 # We build an internal palette on log-transformed domain and wrap it so callers
 # can pass raw µg/m³ values.
 .pollution_pal_internal <- colorNumeric(
-  palette = c("#FFFFEE", "#FFFFB2", "#FED976", "#FEB24C", "#FD8D3C", "#FC4E2A", "#E31A1C", "#B10026"),
+  # palette = c("#FFFFEE", "#FFFFB2", "#FED976", "#FEB24C", "#FD8D3C", "#FC4E2A", "#E31A1C", "#B10026"),
+  palette = c("darkgreen", "lightgreen", "#FFFFB2", "#FD8D3C", "#B10026"),
   domain = c(log1p(0), log1p(120)),
   na.color = "#808080"
 )
@@ -127,6 +128,13 @@ ui <- page_sidebar(
 
   sidebar = sidebar(
     width = 300,
+    selectizeInput(
+      "city_search", "Search City",
+      choices = NULL,
+      selected = character(0),
+      options = list(placeholder = "Type to search...", maxOptions = 10)
+    ),
+    hr(),
     radioButtons(
       "marker_color_mode", "Outcome of Interest",
       choices = c(
@@ -177,7 +185,7 @@ ui <- page_sidebar(
   ),
 
   tags$p(
-    "Explore PM2.5 pollution levels and trajectories across 13,000+ urban centers. Original data from Van Donkelaar et al.", tags$a("https://www.satpm.org/", href = "https://www.satpm.org/", target = "_blank"),".", 
+    "Explore PM2.5 pollution levels and trajectories across 13,000+ urban centers. Original data from van Donkelaar et al. (Atmospheric Composition Analysis Group)", tags$a("https://www.satpm.org/", href = "https://www.satpm.org/", target = "_blank"),".", 
     tags$br(),
     "Trajectory classification based on work from Camille Fournier de Lauriere.",
     tags$a("Paper", href = "https://doi.org/XXXX", target = "_blank"), "|",
@@ -234,6 +242,13 @@ ui <- page_sidebar(
 
 # ---- Server ----
 server <- function(input, output, session) {
+
+  # -- City search choices (server-side for performance) --
+  city_lookup <- st_drop_geometry(cities) %>%
+    arrange(UC_NM_MN) %>%
+    mutate(label = paste0(UC_NM_MN, " (", CTR_MN_NM, ")"))
+  city_choices <- setNames(city_lookup$ID, city_lookup$label)
+  updateSelectizeInput(session, "city_search", choices = city_choices, selected = character(0), server = TRUE)
 
   # -- Pre-compute income lookup once --
   income_lookup <- st_drop_geometry(countries) %>%
@@ -455,8 +470,24 @@ server <- function(input, output, session) {
     click <- input$map_marker_click
     if (!is.null(click$id)) {
       selected_city(click$id)
+      updateSelectizeInput(session, "city_search", selected = click$id)
     }
   })
+
+  # -- City search dropdown selection --
+  observeEvent(input$city_search, {
+    city_id <- input$city_search
+    if (is.null(city_id) || city_id == "") return()
+
+    selected_city(city_id)
+
+    info <- cities %>% filter(as.character(ID) == as.character(city_id))
+    if (nrow(info) > 0) {
+      coords <- st_coordinates(info)
+      leafletProxy("map") %>%
+        setView(lng = as.numeric(coords[1, 1]), lat = as.numeric(coords[1, 2]), zoom = 8)
+    }
+  }, ignoreInit = FALSE)
 
   # -- Plot title --
   output$plot_title <- renderText({
